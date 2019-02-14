@@ -9,6 +9,8 @@ import threading
 import numpy as np
 from keras_preprocessing import get_keras_submodule
 
+from joblib import Parallel, delayed
+
 try:
     IteratorType = get_keras_submodule('utils').Sequence
 except ImportError:
@@ -219,7 +221,9 @@ class BatchFromFilesMixin():
         # build batch of image data
         # self.filepaths is dynamic, is better to call it once outside the loop
         filepaths = self.filepaths
-        for i, j in enumerate(index_array):
+
+        def _transform_samples(x):
+            i,j = x
             img = load_img(filepaths[j],
                            color_mode=self.color_mode,
                            target_size=self.target_size,
@@ -234,6 +238,8 @@ class BatchFromFilesMixin():
                 x = self.image_data_generator.apply_transform(x, params)
                 x = self.image_data_generator.standardize(x)
             batch_x[i] = x
+        Parallel(n_jobs=8, require='sharedmem')(map(delayed(_transform_samples), enumerate(index_array)))
+
         # optionally save augmented images to disk for debugging purposes
         if self.save_to_dir:
             for i, j in enumerate(index_array):
